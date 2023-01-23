@@ -4,22 +4,35 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-secretsmanager-caching-go/secretcache"
+)
+
+var (
+	secretCache, _ = secretcache.New()
 )
 
 // 型定義
 type Response events.APIGatewayProxyResponse
 
 func Handler(ctx context.Context) (Response, error) {
+	// シークレットを取得
+	result, error := secretCache.GetSecretString(os.Getenv("SSM_KEY_NAME"))
+	if error != nil {
+		return Response{StatusCode: 404}, error
+	}
+
 	var buf bytes.Buffer
 
 	testRes := struct {
 		Name string
 		Age  int
 	}{
-		Name: "test",
+		Name: result,
 		Age:  20,
 	}
 	// goの型 → json：Marshal
@@ -27,6 +40,8 @@ func Handler(ctx context.Context) (Response, error) {
 	body, err := json.Marshal(testRes)
 	
 	if err != nil {
+		// errをログ表示
+		log.Println(err)
 		return Response{StatusCode: 404}, err
 	}
 	json.HTMLEscape(&buf, body)
