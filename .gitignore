@@ -1,4 +1,5 @@
 .env.yaml
+.env
 
 # Binaries for programs and plugins
 *.exe

@@ -21,6 +21,7 @@ custom:
   environment:
     dev:
       SSM_KEY_NAME: ${file(./.env.yaml):SSM_KEY_NAME}
+      SLACK_CHANNEL_NAME: ${file(./.env.yaml):SLACK_CHANNEL_NAME}
       
 # you can define service wide environment variables here
 #  environment:
@@ -38,7 +39,8 @@ functions:
     # 環境変数を設定する
     environment:
       SSM_KEY_NAME: ${self:custom.environment.dev.SSM_KEY_NAME}
+      SLACK_CHANNEL_NAME: ${self:custom.environment.dev.SLACK_CHANNEL_NAME}
     events:
       - httpApi:
           path: /hello
-          method: get
+          method: post
