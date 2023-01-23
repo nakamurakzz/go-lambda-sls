@@ -22,19 +22,19 @@ type Response events.APIGatewayProxyResponse
 func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (Response, error) {
 
 	// slackからのリクエストを構造体にマッピング
-	var slackChallengeRequest SlackChallengeRequest
-	slackChallengeRequest, parseError := parseSlackChallengeRequest(request.Body)
+	var slackRequest SlackRequest
+	slackRequest, parseError := parseSlackChallengeRequest(request.Body)
 	if parseError != nil {
 		log.Println(parseError)
 		return Response{StatusCode: 404}, parseError
 	}
 
-	if slackChallengeRequest.isChallenge() {
-		// challengeの場合はchallengeを返す
+	// challengeリクエストの場合はchallengeを返す
+	if slackRequest.isChallenge() {
 		body, marshalError := json.Marshal(struct {
 			Challenge string
 		}{
-			Challenge: slackChallengeRequest.Challenge,
+			Challenge: slackRequest.Challenge,
 		})
 		if marshalError != nil {
 			log.Println(marshalError)
@@ -58,35 +58,34 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (Respon
 		log.Println(secretCacheError)
 		return Response{StatusCode: 404}, secretCacheError
 	}
-		// チャンネル名を取得
-		slackChannelName, slackChannelError := secretCache.GetSecretString(os.Getenv("SSM_KEY_NAME"))
-		if slackChannelError != nil {
-			log.Println(secretCacheError)
-			return Response{StatusCode: 404}, secretCacheError
-		}
-		
+
 	
+	// Slackにメッセージを投稿
 	slackClient := SlackClient{
 		channelToken: slackToken,
-		channelName: slackChannelName,
+		channelName: os.Getenv("SLACK_CHANNEL_NAME"),
+		botUserName: os.Getenv("SLACK_BOT_USER_NAME"),
 	}
 
-	slackErr := slackClient.postMessage("test message from lambda")
+	if slackClient.isBotUser(slackRequest.Event.User) {
+		log.Println("bot user")
+		return Response{StatusCode: 200}, nil
+	}
 
+	// Slackにメッセージを投稿
+	slackErr := slackClient.postMessage("test message from lambda")
 	if slackErr != nil {
 		log.Println(slackErr)
 		return Response{StatusCode: 500}, slackErr
 	}
 
-	// var buf bytes.Buffer
-	res := struct {
+	// goの型 → json：Marshal
+	// json → goの型：Unmarshal
+	body, toJsonErr := json.Marshal(struct {
 		message string
 	}{
 		message: "ok",
-	}
-	// goの型 → json：Marshal
-	// json → goの型：Unmarshal
-	body, toJsonErr := json.Marshal(res)
+	})
 	
 	if toJsonErr != nil {
 		// errをログ表示
@@ -94,7 +93,6 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (Respon
 		return Response{StatusCode: 404}, toJsonErr
 	}
 
-	// json.HTMLEscape(&buf, body)
 	resp := Response{
 		StatusCode:      200,
 		IsBase64Encoded: false,
@@ -113,32 +111,48 @@ func main() {
 	lambda.Start(Handler)
 }
 
-type SlackChallengeRequest struct {
+type Event struct {
+	Text string `json:"text"`
+	User string `json:"user"`
+}
+
+type SlackRequest struct {
 	Token     string `json:"token"`
 	Challenge string `json:"challenge"`
 	Type      string `json:"type"`
+	Event		 Event  `json:"event"`
 }
 
-func (c SlackChallengeRequest) isChallenge() bool {
+func (c SlackRequest) isChallenge() bool {
 	return c.Type == "url_verification"
 }
 
-func parseSlackChallengeRequest(body string) (SlackChallengeRequest, error) {
-	var request SlackChallengeRequest
+func parseSlackChallengeRequest(body string) (SlackRequest, error) {
+	var request SlackRequest
 	err := json.Unmarshal([]byte(body), &request)
-	log. Println(request)
+	log.Println(request)
 	return request, err
 }
 
 type SlackClient struct {
 	channelToken string
 	channelName	string
+	botUserName	string
 }
 
 func (c SlackClient) postMessage (message string) error {
 	log.Println("Post Slack Message")
 	client := slack.New(c.channelToken)
-	log.Println(c.channelName, client)
-	// _, _, err := client.PostMessage(c.channelName, slack.MsgOptionText(message, false))
-	return nil
+	log.Println("post to channel: ", c.channelName)
+	_, _, err := client.PostMessage(c.channelName, slack.MsgOptionText(message, false))
+	return err
+}
+
+func (c SlackClient) isBotUser(userName string) bool {
+	if c.botUserName == "" || userName == "" {
+		return false
+	}
+	res := userName == c.botUserName
+	log.Println("is Bot User?",res, userName, c.botUserName)
+	return userName == c.botUserName
 }
