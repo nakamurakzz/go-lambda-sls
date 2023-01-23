@@ -138,6 +138,7 @@ type SlackClient struct {
 	channelToken string
 	channelName	string
 	botUserName	string
+	channelList []string
 }
 
 func (c SlackClient) postMessage (message string) error {
@@ -155,4 +156,23 @@ func (c SlackClient) isBotUser(userName string) bool {
 	res := userName == c.botUserName
 	log.Println("is Bot User?",res, userName, c.botUserName)
 	return userName == c.botUserName
+}
+
+func (c SlackClient) getChannelList() {
+	// TODO: どこかからチャンネル一覧を取得する
+	c.channelList = []string{
+		"xxxxxxxxx",
+	}
+}
+
+func (c SlackClient) inviteToChannel(userId string ) {
+	client := slack.New(c.channelToken)
+	c.getChannelList()
+	for _, channel := range c.channelList {
+		_, err := client.InviteUsersToConversation(channel, userId)
+		if err != nil {
+			log.Println("invite error", err)
+			continue
+		}
+	}
 }

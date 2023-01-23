@@ -54,3 +54,14 @@ func Test_parseSlackMessageRequest(t *testing.T) {
 		t.Error("req:", req)
 	}
 }
+
+func Test_getChannelList(t *testing.T) {
+	godotenv.Load("../.env")
+	channelToken := os.Getenv("SLACK_TOKEN")
+	slackClient := SlackClient{
+		channelToken: channelToken,
+		channelName: os.Getenv("SLACK_CHANNEL_NAME"),
+		botUserName: "Uwwwwwwww",
+	}
+	slackClient.inviteToChannel("xxxxxxxx")
+}
